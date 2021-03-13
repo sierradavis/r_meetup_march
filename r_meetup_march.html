@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Longitudinal Data Analysis</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Sierra Davis" />
+    <meta name="date" content="2021-03-13" />
+    <script src="libs/header-attrs/header-attrs.js"></script>
+    <link href="libs/tile-view/tile-view.css" rel="stylesheet" />
+    <script src="libs/tile-view/tile-view.js"></script>
+    <link href="libs/tachyons/tachyons.min.css" rel="stylesheet" />
+    <link href="libs/panelset/panelset.css" rel="stylesheet" />
+    <script src="libs/panelset/panelset.js"></script>
+    <link rel="stylesheet" href="xaringan-themer.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+
+
+
+
+
+
+
+
+class: title, middle, inverse
+
+# Longitudinal Data Analysis
+### Kansas City R Meetup
+
+.b[Sierra Davis] &lt;br&gt;
+March 13, 2021
+---
+# Outline
+
+.large[
+
+- Introduction
+]
+--
+.large[
+
+- Data Summary
+]
+
+--
+.large[
+- Analysis
+
+]
+--
+.large[
+- Conclusion
+
+]
+---
+
+# Longitudinal Data
+
+- individuals are measured repeatedly through time
+- study of change over time
+- Examples: BMI, treatment data
+
+---
+
+# Dataset
+
+
+- Throughout this presentation examples will use the Treatment of Lead-Exposed Children Trial dataset.
+
+- These data consist of four repeated measurements of blood lead 
+levels obtained at baseline (or week 0), week 1, week 4, and 
+week 6 on 100 children who were randomly assigned to treatment or placebo.
+
+- Demonstrate the use of various packages to analyze longitudinal data.
+
+Reference: Treatment of Lead-exposed Children (TLC) Trial Group. (2000).
+Safety and Efficacy of Succimer in Toddlers with Blood Lead Levels of 
+20-44 µg/dL.  Pediatric Research, 48, 593-599.
+
+
+
+
+---
+
+class: inverse, center, middle
+
+.largeish[
+Exploratory Data Analysis
+]
+
+---
+
+# {glimpse}
+
+
+
+```r
+names(df)
+```
+
+```
+## [1] "ID"     "group"  "week_0" "week_1" "week_4" "week_6"
+```
+
+
+
+```r
+glimpse(df)
+```
+
+```
+## Rows: 100
+## Columns: 6
+## $ ID     &lt;int&gt; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,…
+## $ group  &lt;fct&gt; P, T, T, P, T, T, P, P, P, P, P, T, P, T, P, P, P, P, T, T, P,…
+## $ week_0 &lt;dbl&gt; 30.8, 26.5, 25.8, 24.7, 20.4, 20.4, 28.6, 33.7, 19.7, 31.1, 19…
+## $ week_1 &lt;dbl&gt; 26.9, 14.8, 23.0, 24.5, 2.8, 5.4, 20.8, 31.6, 14.9, 31.2, 17.5…
+## $ week_4 &lt;dbl&gt; 25.8, 19.5, 19.1, 22.0, 3.2, 4.5, 19.2, 28.5, 15.3, 29.2, 20.5…
+## $ week_6 &lt;dbl&gt; 23.8, 21.0, 23.2, 22.5, 9.4, 11.9, 18.4, 25.1, 14.7, 30.1, 27.…
+```
+
+---
+
+# {dplyr}
+
+
+
+```r
+df %&gt;% 
+  group_by(group) %&gt;% 
+  summarize(avg_week_0=mean(week_0),avg_week_1=mean(week_1),
+            avg_week_4=mean(week_4),avg_week_6=mean(week_6))
+```
+
+```
+## # A tibble: 2 x 5
+##   group avg_week_0 avg_week_1 avg_week_4 avg_week_6
+## * &lt;fct&gt;      &lt;dbl&gt;      &lt;dbl&gt;      &lt;dbl&gt;      &lt;dbl&gt;
+## 1 P           26.3       24.7       24.1       23.6
+## 2 T           26.5       13.5       15.5       20.8
+```
+
+---
+
+# {gtsummary} summarize data with tbl_summary()
+```
+df %&gt;% 
+  select(group,week_0,week_1,week_4,week_6) %&gt;% 
+tbl_summary(
+    by = group,
+    label = list(week_0 ~ "Baseline",
+                 week_1 ~ "Week 1",
+                 week_4 ~ "Week 4",
+                 week_6 ~ "Week 6"),
+    statistic = list(all_continuous() ~ "{mean} ({sd})"),
+    digits = list(week_0 ~ c(1, 1),
+                 week_1 ~ c(1, 1),
+                 week_4 ~ c(1, 1),
+                 week_6 ~ c(1, 1)))
+```
+
+&lt;img src="mean_df.jpg" width="45%" /&gt;
+
+---
+
+# {tidyr} help you create tidy data
+
+
+
+
+```r
+head(df)
+```
+
+```
+##   ID group week_0 week_1 week_4 week_6
+## 1  1     P   30.8   26.9   25.8   23.8
+## 2  2     T   26.5   14.8   19.5   21.0
+## 3  3     T   25.8   23.0   19.1   23.2
+## 4  4     P   24.7   24.5   22.0   22.5
+## 5  5     T   20.4    2.8    3.2    9.4
+## 6  6     T   20.4    5.4    4.5   11.9
+```
+
+
+
+```r
+df %&gt;% 
+  pivot_longer(week_0:week_6, names_to = "week", values_to = "lead_level")
+```
+
+```
+## # A tibble: 400 x 4
+##       ID group week   lead_level
+##    &lt;int&gt; &lt;fct&gt; &lt;chr&gt;       &lt;dbl&gt;
+##  1     1 P     week_0       30.8
+##  2     1 P     week_1       26.9
+##  3     1 P     week_4       25.8
+##  4     1 P     week_6       23.8
+##  5     2 T     week_0       26.5
+##  6     2 T     week_1       14.8
+##  7     2 T     week_4       19.5
+##  8     2 T     week_6       21  
+##  9     3 T     week_0       25.8
+## 10     3 T     week_1       23  
+## # … with 390 more rows
+```
+
+---
+
+# {ggplot2} 
+
+
+
+
+```r
+avg_df %&gt;% 
+  pivot_longer(avg_week_0:avg_week_6, names_to = "week", values_to = "avg_lead_level") %&gt;% 
+  ggplot(aes(x=week,y=avg_lead_level,group=group))+
+  geom_line(aes(color=group))+
+  geom_point(aes(color=group))+
+  theme_Publication()
+```
+
+![](r_meetup_march_files/figure-html/unnamed-chunk-10-1.png)&lt;!-- --&gt;
+
+---
+
+# {dplyr::sample} 
+
+
+
+
+```r
+set.seed(31221)
+by_id &lt;- df %&gt;% group_by(ID)
+sample_df&lt;-sample_n(df, 6)
+
+sample_df %&gt;%  
+  pivot_longer(week_0:week_6, names_to = "week", values_to = "lead_level") %&gt;% 
+  ggplot(aes(x=week,y=lead_level,group=group))+
+  geom_line(aes(color=group))+
+  geom_point(aes(color=group))+
+  facet_wrap(~ID) +
+  theme_Publication()
+```
+
+![](r_meetup_march_files/figure-html/unnamed-chunk-11-1.png)&lt;!-- --&gt;
+
+---
+
+
+```r
+long_df &lt;- df %&gt;%  
+  pivot_longer(week_0:week_6, names_to = "week", values_to = "lead_level")
+```
+
+
+```r
+ggplot(long_df, aes(lead_level)) + 
+  geom_density(aes(data = lead_level, fill = group), position = 'identity', alpha = 0.5) +
+  labs(x = 'Lead level', y = 'Density') + scale_fill_discrete(name = 'Group') + scale_x_continuous(limits = c(0, 65)) +
+  theme_Publication()
+```
+
+![](r_meetup_march_files/figure-html/unnamed-chunk-13-1.png)&lt;!-- --&gt;
+
+---
+
+
+```r
+ggplot(long_df, aes(lead_level)) + 
+  geom_density(aes(data = lead_level, fill = group), position = 'identity', alpha = 0.5) +
+  labs(x = 'Lead level', y = 'Density') + 
+  scale_fill_discrete(name = 'Group') + 
+  scale_x_continuous(limits = c(0, 65)) +
+  facet_wrap(~week) +
+  theme_Publication()
+```
+
+![](r_meetup_march_files/figure-html/unnamed-chunk-14-1.png)&lt;!-- --&gt;
+---
+
+class: inverse, center, middle
+
+.largeish[
+Statistical Analysis
+]
+
+---
+
+# {anova}
+
+
+```r
+long_df &lt;- df %&gt;%  
+  pivot_longer(week_0:week_6, names_to = "week", values_to = "lead_level")
+```
+
+
+```r
+aov &lt;- anova(lm(lead_level ~ group, data = long_df))
+aov
+```
+
+```
+## Analysis of Variance Table
+## 
+## Response: lead_level
+##            Df  Sum Sq Mean Sq F value    Pr(&gt;F)    
+## group       1  3110.9 3110.85  54.998 7.338e-13 ***
+## Residuals 398 22512.0   56.56                      
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+```
+
+- The p-value is far below 0.05, so the null is rejected, and it can be concluded there are differences between the treatment group and the placebo group.
+---
+
+
+class: inverse, center, middle
+
+.largeish[
+Modeling
+]
+
+---
+
+
+```r
+long_df &lt;- df %&gt;%  
+  pivot_longer(week_0:week_6, names_to = "week", values_to = "lead_level")
+```
+
+
+```r
+long_df2 &lt;- df %&gt;%  
+  pivot_longer(week_0:week_6, names_to = "week", values_to = "lead_level") %&gt;% 
+  mutate(week = case_when(week == "week_0"~0,
+                          week == "week_1"~1,
+                          week == "week_4"~4,
+                          week == "week_6"~6,))
+```
+---
+
+# {lme4}
+
+
+
+```r
+model1 &lt;- lmer(lead_level ~ week + (1|ID), REML = F,data=long_df2)
+AIC(model1)
+```
+
+```
+## [1] 2701.562
+```
+
+```r
+BIC(model1)
+```
+
+```
+## [1] 2717.528
+```
+
+```r
+summary(model1)
+```
+
+```
+## Linear mixed model fit by maximum likelihood  ['lmerMod']
+## Formula: lead_level ~ week + (1 | ID)
+##    Data: long_df2
+## 
+##      AIC      BIC   logLik deviance df.resid 
+##   2701.6   2717.5  -1346.8   2693.6      396 
+## 
+## Scaled residuals: 
+##     Min      1Q  Median      3Q     Max 
+## -2.6355 -0.3465  0.0609  0.4124  6.1295 
+## 
+## Random effects:
+##  Groups   Name        Variance Std.Dev.
+##  ID       (Intercept) 29.28    5.411   
+##  Residual             33.86    5.819   
+## Number of obs: 400, groups:  ID, 100
+## 
+## Fixed effects:
+##             Estimate Std. Error t value
+## (Intercept)   22.976      0.700  32.822
+## week          -0.401      0.122  -3.287
+## 
+## Correlation of Fixed Effects:
+##      (Intr)
+## week -0.479
+```
+
+---
+
+
+```r
+model2 &lt;- lmer(lead_level ~ week +  (week|ID),REML = F, data=long_df2)
+```
+
+```
+## boundary (singular) fit: see ?isSingular
+```
+
+```r
+AIC(model2)
+```
+
+```
+## [1] 2700.265
+```
+
+```r
+BIC(model2)
+```
+
+```
+## [1] 2724.214
+```
+
+```r
+summary(model2)
+```
+
+```
+## Linear mixed model fit by maximum likelihood  ['lmerMod']
+## Formula: lead_level ~ week + (week | ID)
+##    Data: long_df2
+## 
+##      AIC      BIC   logLik deviance df.resid 
+##   2700.3   2724.2  -1344.1   2688.3      394 
+## 
+## Scaled residuals: 
+##     Min      1Q  Median      3Q     Max 
+## -2.8343 -0.3107  0.0611  0.4413  5.7237 
+## 
+## Random effects:
+##  Groups   Name        Variance Std.Dev. Corr
+##  ID       (Intercept) 21.35440 4.621        
+##           week         0.08761 0.296    1.00
+##  Residual             33.10475 5.754        
+## Number of obs: 400, groups:  ID, 100
+## 
+## Fixed effects:
+##             Estimate Std. Error t value
+## (Intercept)  22.9760     0.6375  36.043
+## week         -0.4010     0.1242  -3.228
+## 
+## Correlation of Fixed Effects:
+##      (Intr)
+## week -0.333
+## optimizer (nloptwrap) convergence code: 0 (OK)
+## boundary (singular) fit: see ?isSingular
+```
+---
+
+
+```r
+model3 &lt;- lmer(lead_level ~ week + group + (week|ID), REML = F,data=long_df2)
+```
+
+```
+## boundary (singular) fit: see ?isSingular
+```
+
+```r
+AIC(model3)
+```
+
+```
+## [1] 2678.651
+```
+
+```r
+BIC(model3)
+```
+
+```
+## [1] 2706.592
+```
+
+```r
+summary(model3)
+```
+
+```
+## Linear mixed model fit by maximum likelihood  ['lmerMod']
+## Formula: lead_level ~ week + group + (week | ID)
+##    Data: long_df2
+## 
+##      AIC      BIC   logLik deviance df.resid 
+##   2678.7   2706.6  -1332.3   2664.7      393 
+## 
+## Scaled residuals: 
+##     Min      1Q  Median      3Q     Max 
+## -2.6804 -0.3913 -0.0132  0.4718  5.8189 
+## 
+## Random effects:
+##  Groups   Name        Variance Std.Dev. Corr
+##  ID       (Intercept) 14.48781 3.8063       
+##           week         0.09933 0.3152   1.00
+##  Residual             32.96469 5.7415       
+## Number of obs: 400, groups:  ID, 100
+## 
+## Fixed effects:
+##             Estimate Std. Error t value
+## (Intercept)  25.7373     0.7897  32.591
+## week         -0.4010     0.1244  -3.223
+## groupT       -5.5226     1.0710  -5.156
+## 
+## Correlation of Fixed Effects:
+##        (Intr) week  
+## week   -0.283       
+## groupT -0.678  0.000
+## optimizer (nloptwrap) convergence code: 0 (OK)
+## boundary (singular) fit: see ?isSingular
+```
+
+---
+
+
+```r
+model4 &lt;- lmer(lead_level ~ 1 + week + group + week:group+ (week|ID), REML = F,data=long_df2)
+```
+
+```
+## boundary (singular) fit: see ?isSingular
+```
+
+```r
+AIC(model4)
+```
+
+```
+## [1] 2680.598
+```
+
+```r
+BIC(model4)
+```
+
+```
+## [1] 2712.529
+```
+
+```r
+summary(model4)
+```
+
+```
+## Linear mixed model fit by maximum likelihood  ['lmerMod']
+## Formula: lead_level ~ 1 + week + group + week:group + (week | ID)
+##    Data: long_df2
+## 
+##      AIC      BIC   logLik deviance df.resid 
+##   2680.6   2712.5  -1332.3   2664.6      392 
+## 
+## Scaled residuals: 
+##     Min      1Q  Median      3Q     Max 
+## -2.6747 -0.3890 -0.0065  0.4871  5.8349 
+## 
+## Random effects:
+##  Groups   Name        Variance Std.Dev. Corr
+##  ID       (Intercept) 14.49166 3.807        
+##           week         0.09922 0.315    1.00
+##  Residual             32.95941 5.741        
+## Number of obs: 400, groups:  ID, 100
+## 
+## Fixed effects:
+##             Estimate Std. Error t value
+## (Intercept) 25.68536    0.82083  31.292
+## week        -0.37213    0.17595  -2.115
+## groupT      -5.41873    1.16082  -4.668
+## week:groupT -0.05774    0.24884  -0.232
+## 
+## Correlation of Fixed Effects:
+##             (Intr) week   groupT
+## week        -0.386              
+## groupT      -0.707  0.273       
+## week:groupT  0.273 -0.707 -0.386
+## optimizer (nloptwrap) convergence code: 0 (OK)
+## boundary (singular) fit: see ?isSingular
+```
+
+---
+
+
+```r
+anova(model1, model2,model3,model4)
+```
+
+```
+## Data: long_df2
+## Models:
+## model1: lead_level ~ week + (1 | ID)
+## model2: lead_level ~ week + (week | ID)
+## model3: lead_level ~ week + group + (week | ID)
+## model4: lead_level ~ 1 + week + group + week:group + (week | ID)
+##        npar    AIC    BIC  logLik deviance   Chisq Df Pr(&gt;Chisq)    
+## model1    4 2701.6 2717.5 -1346.8   2693.6                          
+## model2    6 2700.3 2724.2 -1344.1   2688.3  5.2970  2    0.07076 .  
+## model3    7 2678.7 2706.6 -1332.3   2664.7 23.6136  1  1.178e-06 ***
+## model4    8 2680.6 2712.5 -1332.3   2664.6  0.0538  1    0.81653    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+```
+
+---
+
+ - Next step : tidymodels
+---
+
+class: inverse, center, middle
+
+.largeish[
+Thank You
+]
+
+---
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
